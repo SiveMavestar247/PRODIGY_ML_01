@@ -1,56 +1,65 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from IPython.display import clear_output
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 
-import tensorflow as tf
-import tensorflow_estimator as tfe
-import tensorflow._api.v2.compat.v2.feature_column as fc
-# import tensorflow_estimator as tfes
+# Replace 'train.csv' and 'test.csv' with the actual file paths
+train_data = pd.read_excel('Files\\train.xlsx')
+test_data = pd.read_excel('Files\\test.xlsx')
 
-# Load dataset.
-dftrain = pd.read_csv('https://storage.googleapis.com/tf-datasets/titanic/train.csv') # training data
-dfeval = pd.read_csv('https://storage.googleapis.com/tf-datasets/titanic/eval.csv') # testing data
+# Features and target variable for training
+train_data['TotalBathrooms'] = (train_data['FullBath'] + 0.5 * train_data['HalfBath'] +
+                              train_data['BsmtFullBath'] + 0.5 * train_data['BsmtHalfBath'])
 
-y_train = dftrain.pop('survived')   
-y_eval = dfeval.pop('survived')
+train_data['SquareFootage'] = (train_data['GrLivArea'] + 
+                              train_data['1stFlrSF'] + train_data['2ndFlrSF'] + 
+                              train_data['BsmtFinSF1']+ train_data['BsmtFinSF2']+ train_data['TotalBsmtSF'])
 
-CATEGORICAL_COLUMNS = ['sex', 'n_siblings_spouses', 'parch', 'class', 'deck',
-                       'embark_town', 'alone']
-NUMERIC_COLUMNS = ['age', 'fare']
+X_train = train_data[['SquareFootage', 'BedroomAbvGr', 'TotalBathrooms']]
+y_train = train_data['SalePrice']
 
-feature_columns = []
-for feature_name in CATEGORICAL_COLUMNS:
-  vocabulary = dftrain[feature_name].unique() 
-  feature_columns.append(tf.feature_column.categorical_column_with_vocabulary_list(feature_name, vocabulary))
+# Features for testing (you'll predict the price for these)
+test_data['TotalBathrooms'] = (test_data['FullBath'] + 0.5 * test_data['HalfBath'] +
+                              test_data['BsmtFullBath'] + 0.5 * test_data['BsmtHalfBath'])
 
-for feature_name in NUMERIC_COLUMNS:
-  feature_columns.append(tf.feature_column.numeric_column(feature_name, dtype=tf.float32))
+test_data['SquareFootage'] = (test_data['GrLivArea'] + 
+                              test_data['1stFlrSF'] + test_data['2ndFlrSF'] + 
+                              test_data['BsmtFinSF1']+ test_data['BsmtFinSF2']+ test_data['TotalBsmtSF'])
+X_test = test_data[['SquareFootage', 'BedroomAbvGr', 'TotalBathrooms']]
 
+# Initialize the model
+model = LinearRegression()
 
-def make_input_fn(data_df, label_df, num_epochs=10, shuffle=True, batch_size=32):
-  def input_function(): 
-    ds = tf.data.Dataset.from_tensor_slices((dict(data_df), label_df))  
-    if shuffle:
-      ds = ds.shuffle(1000) 
-    ds = ds.batch(batch_size).repeat(num_epochs) 
-    return ds 
-  return input_function 
+# Train the model
+model.fit(X_train, y_train)
 
-train_input_fn = make_input_fn(dftrain, y_train)
-eval_input_fn = make_input_fn(dfeval, y_eval, num_epochs=1, shuffle=False)
+# Predicting the prices for the test set
+predicted_prices = model.predict(X_test)
 
-linear_est = tfe.estimator.LinearClassifier(feature_columns=feature_columns)
+# Split the training data for validation
+X_train_split, X_val_split, y_train_split, y_val_split = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
 
-linear_est.train(train_input_fn) 
-result = linear_est.evaluate(eval_input_fn) 
+# Train on the split training data
+model.fit(X_train_split, y_train_split)
 
-clear_output()
-print(result['accuracy']) 
+# Predict on the validation set
+y_val_pred = model.predict(X_val_split)
 
-pred_dicts = list(linear_est.predict(eval_input_fn))
-probs = pd.Series([pred['probabilities'][1] for pred in pred_dicts])
+# Calculate Mean Squared Error and R-squared
+mse = mean_squared_error(y_val_split, y_val_pred)
+rmse = np.sqrt(mse)
+r2 = r2_score(y_val_split, y_val_pred)
 
-probs.plot(kind='hist', bins=20, title='predicted probabilities')
+print(f'Mean Squared Error (MSE): {mse}')
+print(f'Root Mean Squared Error (RMSE): {rmse}')
+print(f'R-squared (R2): {r2}')
+
+# Save the predictions to a CSV file
+output = pd.DataFrame({
+    'Id': test_data['Id'],
+    'SalePrice': predicted_prices
+})
+
+# Save the output to a CSV file
+output.to_csv('house_price_predictions.csv', index=False)
