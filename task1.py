@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 
-# Replace 'train.csv' and 'test.csv' with the actual file paths
+# Load data
 train_data = pd.read_excel('Files\\train.xlsx')
 test_data = pd.read_excel('Files\\test.xlsx')
 
@@ -19,7 +19,7 @@ train_data['SquareFootage'] = (train_data['GrLivArea'] +
 X_train = train_data[['SquareFootage', 'BedroomAbvGr', 'TotalBathrooms']]
 y_train = train_data['SalePrice']
 
-# Features for testing (you'll predict the price for these)
+# Features for testing
 test_data['TotalBathrooms'] = (test_data['FullBath'] + 0.5 * test_data['HalfBath'] +
                               test_data['BsmtFullBath'] + 0.5 * test_data['BsmtHalfBath'])
 
